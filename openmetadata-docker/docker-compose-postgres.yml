@@ -54,12 +54,12 @@ services:
       - ../finguard/.env
 
     environment:
-      - OMD_URL=http://openmetadata_server:8585/api/v1
+      - OMD_URL=http://openmetadata-server:8585/api/v1
 
     command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
 
     depends_on:
-      - openmetadata_server
+      - openmetadata-server
 
     restart: unless-stopped
 
