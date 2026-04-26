@@ -50,17 +50,16 @@ services:
     ports:
       - "8000:8000"
 
-    volumes:
-      - ../finguard:/app
+    env_file:
+      - ../finguard/.env
 
     environment:
-      - OPENMETADATA_URL=http://openmetadata-server:8585/api
-      - PYTHONPATH=/app
+      - OMD_URL=http://openmetadata_server:8585/api/v1
 
-    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
 
     depends_on:
-      - openmetadata-server
+      - openmetadata_server
 
     restart: unless-stopped
 
