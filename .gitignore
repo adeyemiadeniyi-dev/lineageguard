@@ -1,1 +1,16 @@
-../.env
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Environment variables
+.env
+
+# Docker volumes (postgres data)
+openmetadata-docker/docker-volume/db-data-postgres/
