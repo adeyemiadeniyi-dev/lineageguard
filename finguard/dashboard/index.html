@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>FINGUARD Sentinel</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+
+<body class="bg-white text-gray-900">
+
+    <div class="max-w-7xl mx-auto p-6">
+
+        <!-- HEADER -->
+        <div class="flex justify-between items-center mb-6">
+            <h1 class="text-2xl font-bold">🛡️ FINGUARD Sentinel</h1>
+            <div class="text-sm text-green-600">● SYSTEM LIVE</div>
+        </div>
+
+        <!-- ACTIONS -->
+        <div class="flex gap-3 mb-6">
+            <button onclick="triggerEvent('raw_transactions')" class="px-4 py-2 bg-blue-600 text-white rounded">
+                Trigger Raw Trans
+            </button>
+
+            <button onclick="triggerEvent('fraud_scores')" class="px-4 py-2 bg-yellow-500 text-white rounded">
+                Trigger Fraud Alert
+            </button>
+        </div>
+
+        <!-- TOP METRICS -->
+        <div class="grid grid-cols-3 gap-4 mb-6">
+            <div class="p-4 bg-gray-100 rounded">
+                <div class="text-xs text-gray-500">ACTIVE MONITOR</div>
+                <div id="table-name" class="text-lg font-semibold">--</div>
+            </div>
+
+            <div class="p-4 bg-gray-100 rounded">
+                <div class="text-xs text-gray-500">RISK SCORE</div>
+                <div id="risk-score" class="text-2xl font-bold">0/10</div>
+                <div id="risk-trend" class="text-xs text-gray-500"></div>
+            </div>
+
+            <div class="p-4 bg-gray-100 rounded">
+                <div class="text-xs text-gray-500">FINANCIAL RISK</div>
+                <div id="fin-risk" class="text-xl text-red-600">$0</div>
+            </div>
+        </div>
+
+        <!-- ALERT BANNER -->
+        <div id="alert-banner" class="hidden p-4 mb-6 border rounded bg-yellow-50 text-yellow-800">
+            ⚠ Alert
+        </div>
+
+        <!-- MAIN GRID -->
+        <div class="grid grid-cols-2 gap-6">
+
+            <!-- DOWNSTREAM -->
+            <div class="p-4 bg-gray-100 rounded">
+                <h2 class="font-semibold mb-2">Downstream Impact</h2>
+                <ul id="downstream-list" class="space-y-2 text-sm"></ul>
+            </div>
+
+            <!-- AI -->
+            <div class="p-4 bg-gray-100 rounded">
+                <div class="flex justify-between">
+                    <h2 class="font-semibold">AI Risk Insight</h2>
+                    <span id="ai-conf" class="text-xs text-gray-500">--</span>
+                </div>
+
+                <p id="ai-impact" class="mt-2 text-sm"></p>
+
+                <div class="mt-4 text-xs text-gray-500">Reasoning</div>
+                <p id="ai-reasoning" class="text-sm"></p>
+
+                <div class="mt-4 text-xs text-gray-500">Action</div>
+                <p id="ai-action" class="text-sm text-yellow-600"></p>
+            </div>
+        </div>
+
+        <!-- SYSTEM AUTOMATION -->
+        <div class="mt-6 p-4 bg-gray-100 rounded">
+            <h2 class="font-semibold mb-2">System Automation</h2>
+
+            <div>Incident ID: <span id="incident-id">--</span></div>
+            <div>Alert Status: <span id="alert-status">--</span></div>
+            <div>Decision: <span id="system-decision">--</span></div>
+            <div>Escalation: <span id="escalation-timer">--</span></div>
+        </div>
+
+    </div>
+
+    <script>
+
+        let lastRiskScore = 0;
+        let escalationTimer = null;
+
+        function generateIncidentId() {
+            return "#A" + Math.floor(1000 + Math.random() * 9000);
+        }
+
+        function startEscalation(minutes = 15) {
+            clearInterval(escalationTimer);
+
+            let timeLeft = minutes * 60;
+            const el = document.getElementById("escalation-timer");
+
+            escalationTimer = setInterval(() => {
+                const min = Math.floor(timeLeft / 60);
+                const sec = timeLeft % 60;
+
+                el.innerText = `${min}:${sec.toString().padStart(2, '0')}`;
+                timeLeft--;
+
+                if (timeLeft < 0) {
+                    clearInterval(escalationTimer);
+                    el.innerText = "Escalated 🚨";
+                }
+            }, 1000);
+        }
+
+        async function triggerEvent(table) {
+            // instant UI feedback
+            document.getElementById("table-name").innerText = table;
+            document.getElementById("risk-score").innerText = "...";
+            document.getElementById("fin-risk").innerText = "Calculating...";
+
+            await fetch("/webhook", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    eventType: "entityUpdated",
+                    entityType: "table",
+                    entity: { name: table },
+                    changeDescription: { fieldsUpdated: [{ name: "columns" }] }
+                })
+            });
+        }
+
+        // SSE STREAM
+        const eventSource = new EventSource("/api/events");
+
+        eventSource.onmessage = (e) => {
+            const d = JSON.parse(e.data);
+
+            const risk = d.risk || "LOW";
+            const score = d.risk_score || 0;
+
+            // BASIC DATA
+            document.getElementById("table-name").innerText = d.table || "--";
+            document.getElementById("risk-score").innerText = score + "/10";
+            document.getElementById("fin-risk").innerText = d.financial_risk || "--";
+
+            // TREND
+            const trend = document.getElementById("risk-trend");
+            if (score > lastRiskScore) trend.innerText = "↑ Increasing risk";
+            else if (score < lastRiskScore) trend.innerText = "↓ Decreasing risk";
+            else trend.innerText = "";
+            lastRiskScore = score;
+
+            // AI
+            const ai = d.ai_insight || {};
+            document.getElementById("ai-impact").innerText = ai.business_impact || "--";
+            document.getElementById("ai-reasoning").innerText = ai.reasoning || "--";
+            document.getElementById("ai-action").innerText = ai.recommended_action || "--";
+            document.getElementById("ai-conf").innerText =
+                "Confidence: " + ((ai.confidence || 0) * 100).toFixed(0) + "%";
+
+            // INCIDENT SYSTEM
+            document.getElementById("incident-id").innerText = generateIncidentId();
+
+            const alertStatus = document.getElementById("alert-status");
+            const decision = document.getElementById("system-decision");
+
+            if (risk === "HIGH") {
+                alertStatus.innerText = "Alert sent to Data Engineering";
+                decision.innerText = "Immediate escalation";
+                startEscalation();
+            }
+            else if (risk === "MEDIUM") {
+                alertStatus.innerText = "Alert sent (monitoring)";
+                decision.innerText = "Review required";
+                startEscalation();
+            }
+            else {
+                alertStatus.innerText = "No alert needed";
+                decision.innerText = "System stable";
+                clearInterval(escalationTimer);
+                document.getElementById("escalation-timer").innerText = "--";
+            }
+
+            // ALERT BANNER
+            const banner = document.getElementById("alert-banner");
+
+            if (risk === "HIGH") {
+                banner.classList.remove("hidden");
+                banner.innerText = "🚨 Critical system risk detected";
+                banner.className = "p-4 mb-6 bg-red-100 text-red-700 border rounded";
+            }
+            else if (risk === "MEDIUM") {
+                banner.classList.remove("hidden");
+                banner.innerText = "⚠ Medium risk detected";
+                banner.className = "p-4 mb-6 bg-yellow-100 text-yellow-700 border rounded";
+            }
+            else {
+                banner.classList.add("hidden");
+            }
+
+            // DOWNSTREAM
+            const list = document.getElementById("downstream-list");
+            const downstream = d.downstream_tables || [];
+
+            list.innerHTML = downstream.map(t => `
+        <li class="flex justify-between p-2 bg-white border rounded">
+            <span>${t}</span>
+            <span class="text-xs">${risk}</span>
+        </li>
+    `).join("");
+
+            lucide.createIcons();
+        };
+    </script>
+</body>
+
+</html>
